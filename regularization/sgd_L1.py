@@ -17,11 +17,13 @@ class NeuralNetwork:
     def __init__(self,
                  layers_size: List[int],
                  learning_rate: float,
+                 L1_lambda: float,
                  mini_batch_size: int,
                  training_epochs: int
                  ):
         # Save training hyper-parameters
         self.learning_rate = learning_rate
+        self.L1_lambda = L1_lambda
         self.mini_batch_size = mini_batch_size
         self.training_epochs = training_epochs
         # Create layers
@@ -74,7 +76,7 @@ class NeuralNetwork:
         for x, y in data:
             y_hat = self.forward(x)
             correct += y.argmax() == y_hat.argmax()
-            sum_loss = self.loss(y)
+            sum_loss += self.loss(y)
         return correct/n_samples, sum_loss/n_samples
     
     def calc_gradients(self, x, y):
@@ -86,17 +88,16 @@ class NeuralNetwork:
         # Hidden layers
         for i in range(1, self.num_layers-1):
             l = (self.num_layers-1) - i
-            self.nabla_z[l] = self.ReLU_derivative(self.z[l]) * (self.weights[l+1].T @ self.nabla_z[l+1])
+            self.nabla_z[l] = ReLU_derivative(self.z[l]) * (self.weights[l+1].T @ self.nabla_z[l+1])
             self.nabla_w[l] = np.outer(self.nabla_z[l], self.a[l-1])
         # First layer
         l = 0
-        self.nabla_z[l] = self.ReLU_derivative(self.z[l]) * (self.weights[l+1].T @ self.nabla_z[l+1])
+        self.nabla_z[l] = ReLU_derivative(self.z[l]) * (self.weights[l+1].T @ self.nabla_z[l+1])
         self.nabla_w[l] = np.outer(self.nabla_z[l], x.flatten())
         return self.loss(y)
     
     def train(self, train_data, test_data):
         n_mini_batches = len(train_data) // self.mini_batch_size
-        training_index = np.arange(len(train_data))
         accuracy_by_epoch = []
         loss_by_epoch = []
         # Performance baseline
@@ -108,7 +109,7 @@ class NeuralNetwork:
         # Training loop
         for epoch in range(self.training_epochs):
             print(f"Epoch {epoch}\n" + 20*'-')
-            rng.shuffle(training_index)
+            rng.shuffle(train_data)
             for mini_batch_number in range(n_mini_batches):
                 sum_loss = 0
                 for l in range(self.num_layers):
@@ -128,7 +129,8 @@ class NeuralNetwork:
 
                 for l in range(self.num_layers):
                     self.biases[l] -= self.learning_rate * self.sum_nabla_z[l] / n
-                    self.weights[l] -= self.learning_rate * self.sum_nabla_w[l] / n
+                    self.weights[l] -= self.learning_rate * (self.sum_nabla_w[l] + \
+                                                             self.L1_lambda * np.sign(self.weights[l]) ) / n
 
                 if mini_batch_number % 100 == 0:
                     print(f"loss: {sum_loss/n:>8f} [mini-batch {mini_batch_number} / {n_mini_batches}]")
